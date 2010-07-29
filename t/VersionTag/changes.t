@@ -49,7 +49,7 @@ my $newAsset        = $import->addChild( {
 #----------------------------------------------------------------------------
 # Tests
 
-plan tests => 1;        # Increment this number for each test you create
+plan tests => 2;        # Increment this number for each test you create
 
 #----------------------------------------------------------------------------
 # put your tests here
