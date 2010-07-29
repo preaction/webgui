@@ -51,7 +51,7 @@ my $newRevision     = $oldRevision->addRevision( {
 #----------------------------------------------------------------------------
 # Tests
 
-plan tests => 6;        # Increment this number for each test you create
+plan tests => 7;        # Increment this number for each test you create
 
 #----------------------------------------------------------------------------
 # test getRevisionDiff to get a functional diff
@@ -102,4 +102,19 @@ is( ref $changes, 'HASH' );
 cmp_deeply( $changes, $expectedChanges, 'getRevisionDiffAsHtml uses HTML tags instead of []{}' );
 
 
+#----------------------------------------------------------------------------
+# test www_viewRevisionDiff
+
+# Use the HTML expected changes
+$session->request->setup_body({
+    func                => 'viewRevisionDiff',
+    revisionDate        => $newRevision->get('revisionDate'), # Tells WebGUI to load this revision
+    oldRevisionDate     => $oldRevision->get('revisionDate'),
+});
+my $output  = $newRevision->www_viewRevisionDiff;
+cmp_deeply(
+    $output,
+    all( map { regexp(qr{\Q$_}) } values %$expectedChanges ),
+    "www_viewRevisionDiff contains all HTML diffs"
+);
 #vim:ft=perl
