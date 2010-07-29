@@ -54,7 +54,7 @@ my $newRevision     = $oldRevision->addRevision( {
 plan tests => 7;        # Increment this number for each test you create
 
 #----------------------------------------------------------------------------
-# test getRevisionDiff to get a functional diff
+# test getRevisionChanges to get a functional diff
 my $expectedChanges = {
         title       => "[Old]{New} revision",
         menuTitle   => "[Old]{New}",
@@ -65,24 +65,24 @@ my $expectedChanges = {
         groupIdEdit => "[Admins]{Registered Users}", # getValueAsHtml here
 };
 
-my $changes = $newRevision->getRevisionDiff( $oldRevision->get('revisionDate') );
+my $changes = $newRevision->getRevisionChanges( $oldRevision->get('revisionDate') );
 is( ref $changes, 'HASH' );
 cmp_deeply(
     $changes,
     $expectedChanges,
-    "All changes are shown in the diff",
+    "All changes are shown",
 );
 
-my $changes = $newRevision->getRevisionDiff();
+my $changes = $newRevision->getRevisionChanges();
 is( ref $changes, 'HASH' );
 cmp_deeply(
     $changes,
     $expectedChanges,
-    "getRevisionDiff defaults to previous revision"
+    "getRevisionChanges defaults to previous revision"
 );
 
 #----------------------------------------------------------------------------
-# test getRevisionDiffAsHtml to get a pretty diff for users
+# test getRevisionChangesAsHtml to get a pretty diff for users
 # IMPLEMENTOR NOTE: 
 # local %String::Diff::DEFAULT_MARKS = ( ... );
 # $self->getRevisionDiff( @_[1..-1] );
@@ -97,24 +97,24 @@ $expectedChanges = {
         groupIdEdit => "<del>Admins</del><ins>Registered Users</ins>",
 };
 
-my $changes = $newRevision->getRevisionDiffAsHtml( $oldRevision->get('revisionDate') );
+my $changes = $newRevision->getRevisionChangesAsHtml( $oldRevision->get('revisionDate') );
 is( ref $changes, 'HASH' );
-cmp_deeply( $changes, $expectedChanges, 'getRevisionDiffAsHtml uses HTML tags instead of []{}' );
+cmp_deeply( $changes, $expectedChanges, 'getRevisionChangesAsHtml uses HTML tags instead of []{}' );
 
 
 #----------------------------------------------------------------------------
-# test www_viewRevisionDiff
+# test www_viewRevisionChanges
 
 # Use the HTML expected changes
 $session->request->setup_body({
-    func                => 'viewRevisionDiff',
+    func                => 'viewRevisionChanges',
     revisionDate        => $newRevision->get('revisionDate'), # Tells WebGUI to load this revision
     oldRevisionDate     => $oldRevision->get('revisionDate'),
 });
-my $output  = $newRevision->www_viewRevisionDiff;
+my $output  = $newRevision->www_viewRevisionChanges;
 cmp_deeply(
     $output,
     all( map { regexp(qr{\Q$_}) } values %$expectedChanges ),
-    "www_viewRevisionDiff contains all HTML diffs"
+    "www_viewRevisionChanges contains all HTML changes"
 );
 #vim:ft=perl
