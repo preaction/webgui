@@ -1,0 +1,105 @@
+# vim:syntax=perl
+#-------------------------------------------------------------------
+# WebGUI is Copyright 2001-2009 Plain Black Corporation.
+#-------------------------------------------------------------------
+# Please read the legal notices (docs/legal.txt) and the license
+# (docs/license.txt) that came with this distribution before using
+# this software.
+#------------------------------------------------------------------
+# http://www.plainblack.com                     info@plainblack.com
+#------------------------------------------------------------------
+
+# Test the getRevisionDiff( ) function and related functions
+# 
+#
+
+use FindBin;
+use strict;
+use lib "$FindBin::Bin/lib";
+use Test::More;
+use Test::Deep;
+use WebGUI::Test; # Must use this before any other WebGUI modules
+use WebGUI::Session;
+
+#----------------------------------------------------------------------------
+# Init
+my $session         = WebGUI::Test->session;
+my $import          = WebGUI::Asset->getImportNode( $session );
+my $oldRevision     = $import->addChild( {
+    className       => 'WebGUI::Asset::Snippet',
+    title           => "Old revision",
+    menuTitle       => "Old",
+    snippet         => "Old text is good to have even when we replace it with new text",
+    usePacked       => 0,
+    mimeType        => "text/plain",
+    ownerUserId     => "3",
+    groupIdView     => "7",
+    groupIdEdit     => "3",
+} );
+
+my $newRevision     = $oldRevision->addRevision( {
+    title           => "New revision",
+    menuTitle       => "New",
+    snippet         => "New text is good to have even when we replace it with old text",
+    usePacked       => 1,
+    mimeType        => "text/html",
+    ownerUserId     => "1",
+    groupIdView     => "7",
+    groupIdEdit     => "2",
+} );
+
+#----------------------------------------------------------------------------
+# Tests
+
+plan tests => 6;        # Increment this number for each test you create
+
+#----------------------------------------------------------------------------
+# test getRevisionDiff to get a functional diff
+my $expectedChanges = {
+        title       => "[Old]{New} revision",
+        menuTitle   => "[Old]{New}",
+        snippet     => "[Old]{New} text is good to have even when we replace it with [new]{old} text",
+        usePacked   => "[Yes]{No}",     # getValueAsHtml here
+        mimeType    => "[text/plain]{text/html}",
+        ownerUserId => "[Admin]{Visitor}", # getValueAsHtml here
+        groupIdEdit => "[Admins]{Registered Users}", # getValueAsHtml here
+};
+
+my $changes = $newRevision->getRevisionDiff( $oldRevision->get('revisionDate') );
+is( ref $changes, 'HASH' );
+cmp_deeply(
+    $changes,
+    $expectedChanges,
+    "All changes are shown in the diff",
+);
+
+my $changes = $newRevision->getRevisionDiff();
+is( ref $changes, 'HASH' );
+cmp_deeply(
+    $changes,
+    $expectedChanges,
+    "getRevisionDiff defaults to previous revision"
+);
+
+#----------------------------------------------------------------------------
+# test getRevisionDiffAsHtml to get a pretty diff for users
+# IMPLEMENTOR NOTE: 
+# local %String::Diff::DEFAULT_MARKS = ( ... );
+# $self->getRevisionDiff( @_[1..-1] );
+# Thank me later
+$expectedChanges = {
+        title       => "<del>Old</del><ins>New</ins> revision",
+        menuTitle   => "<del>Old</del><ins>New</ins>",
+        snippet     => "<del>Old</del><ins>New</ins> text is good to have even when we replace it with <del>new</del><ins>old</ins> text",
+        usePacked   => "<del>Yes</del><ins>No</ins>",
+        mimeType    => "<del>text/plain</del><ins>text/html</ins>",
+        ownerUserId => "<del>Admin</del><ins>Visitor</ins>",
+        groupIdEdit => "<del>Admins</del><ins>Registered Users</ins>",
+};
+
+my $changes = $newRevision->getRevisionDiffAsHtml( $oldRevision->get('revisionDate') );
+is( ref $changes, 'HASH' );
+cmp_deeply( $changes, $expectedChanges, 'getRevisionDiffAsHtml uses HTML tags instead of []{}' );
+
+
+#vim:ft=perl
