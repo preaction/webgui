@@ -46,7 +46,7 @@ my $newRevision     = $oldRevision->addRevision( {
     ownerUserId     => "1",
     groupIdView     => "7",
     groupIdEdit     => "2",
-} );
+}, time + 10 );
 
 #----------------------------------------------------------------------------
 # Tests
