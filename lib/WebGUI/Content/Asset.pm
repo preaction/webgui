@@ -141,10 +141,14 @@ sub getUrlPermutations {
     my $url          = shift;
     my @permutations = ();
     return \@permutations if !$url;
+
+    # Handle .ext as a seperate URL
     if ($url =~ /\.\w+$/) {
         push @permutations, $url;
         $url =~ s/\.\w+$//;
     }
+
+    # Change "/one/two/three" into "/one/two/three", "/one/two", "/one"
     my $uri       = URI->new($url);
     my @fragments = $uri->path_segments();
     FRAG: while (@fragments) {

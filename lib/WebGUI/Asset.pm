@@ -581,14 +581,19 @@ sub dispatch {
     my $state = $self->get('state');
     ##Only allow interaction with assets in certain states
     return if $state ne 'published' && $state ne 'archived' && !$session->var->isAdminOn;
+
+    # Determine which subroutine we should call
     my $func    = $session->form->param('func') || 'view';
-    my $viewing = $func eq 'view' ? 1 : 0;
+    my $viewing = $func eq 'view' ? 1 : 0;  # Are we calling www_view?
     my $sub     = $self->can('www_'.$func);
+    # Fallback to the www_view method
     if (!$sub && $func ne 'view') {
         $sub     = $self->can('www_view');
         $viewing = 1;
     }
     return undef unless $sub;
+
+    # Try our determined sub
     my $output = eval { $self->$sub(); };
     if (my $e = Exception::Class->caught('WebGUI::Error::ObjectNotFound::Template')) {
                                          #WebGUI::Error::ObjectNotFound::Template
@@ -598,8 +603,9 @@ sub dispatch {
         my $message = $@;
         $session->log->warn("Couldn't call method www_".$func." on asset for url: ".$session->url->getRequestedUrl." Root cause: ".$message);
     }
-    return $output if $output || $viewing;
-    ##No output, try the view method instead
+    return $output if $output || $viewing;  # Always return if we're calling www_view
+
+    # No output, try the view method instead
     $output = eval { $self->www_view };
     if (my $e = Exception::Class->caught('WebGUI::Error::ObjectNotFound::Template')) {
         $session->log->error(sprintf "%s templateId: %s assetId: %s", $e->error, $e->templateId, $e->assetId);
