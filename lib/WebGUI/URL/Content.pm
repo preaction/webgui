@@ -20,6 +20,7 @@ use WebGUI::Affiliate;
 use WebGUI::Exception;
 use WebGUI::Pluggable;
 use WebGUI::Session;
+use WebGUI::Asset::Template;
 
 =head1 NAME
 
@@ -58,13 +59,36 @@ sub handler {
                 $session->errorHandler->error($e->package.":".$e->line." - ".$e->error);
                 $session->errorHandler->debug($e->package.":".$e->line." - ".$e->trace);
             }
-            elsif ( $@ ) {
-                $session->errorHandler->error( $@ );
-            }
-            else {
-                if ($output eq "chunked") {
-                    if ($session->errorHandler->canShowDebug()) {
-                        $session->output->print($session->errorHandler->showDebug(),1);
+            WebGUI::Asset::Template->processVariableHeaders($session);
+            foreach my $handler (@{$config->get("contentHandlers")}) {
+                my $output = eval { WebGUI::Pluggable::run($handler, "handler", [ $session ] )};
+                if ( my $e = WebGUI::Error->caught ) {
+                    $session->errorHandler->error($e->package.":".$e->line." - ".$e->error);
+                    $session->errorHandler->debug($e->package.":".$e->line." - ".$e->trace);
+                }
+                elsif ( $@ ) {
+                    $session->errorHandler->error( $@ );
+                }
+                else {
+                    if ($output eq "chunked") {
+                        if ($session->errorHandler->canShowDebug()) {
+                            $session->output->print($session->errorHandler->showDebug(),1);
+                        }
+                        last;
+                    }
+                    if ($output eq "empty") {
+                        if ($session->errorHandler->canShowDebug()) {
+                            $session->output->print($session->errorHandler->showDebug(),1);
+                        }
+                        last;
+                    }
+                    elsif (defined $output && $output ne "") {
+                        $session->http->sendHeader;
+                        $session->output->print($output);
+                        if ($session->errorHandler->canShowDebug()) {
+                            $session->output->print($session->errorHandler->showDebug(),1);
+                        }
+                        last;
                     }
                     last;
                 }
@@ -83,7 +107,10 @@ sub handler {
                 }
             }
         }
-        $session->close;
+        $session->output->print(
+            WebGUI::Asset::Template->getVariableJson($session), 1
+        );
+        $session->close if defined $session;
         return Apache2::Const::OK;
     });
     $request->push_handlers(PerlMapToStorageHandler => sub { return Apache2::Const::OK });

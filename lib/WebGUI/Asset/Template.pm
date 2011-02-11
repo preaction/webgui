@@ -265,7 +265,40 @@ sub getParser {
     }
 }
 
+#-------------------------------------------------------------------
+#
+# See the warning about using this on processVariableHeaders(). If no
+# variables were captured, we'll return the empty string.
 
+sub getVariableJson {
+    my ($class, $session) = @_;
+    my ($show, $vars, $json);
+
+    return ($show = $session->stow->get('showTemplateVars'))
+        && ($vars = $show->{vars})
+        && ($json = eval { JSON::encode_json($vars) })
+        && ($show->{startDelimiter} . $json . $show->{endDelimiter})
+        or '';
+}
+
+#-------------------------------------------------------------------
+
+=head2 importAssetCollateralData ( data )
+
+Override to import attachments from old versions of WebGUI
+
+=cut
+
+sub importAssetCollateralData {
+    my ( $self, $data, @args ) = @_;
+    if ( $data->{template_attachments} ) {
+        $self->update( { attachmentsJson => JSON::to_json($data->{template_attachments}) } );
+    }
+    return $self->SUPER::importAssetCollateralData( $data, @args );
+}
+
+    
+>>>>>>> 61245ba... Fix template preview to work with chunked content and template post-processing (in Layout, for instance)
 #-------------------------------------------------------------------
 
 =head2 indexContent ( )
@@ -321,12 +354,106 @@ A hash reference containing template variables and loops. Automatically includes
 =cut
 
 sub process {
-	my $self = shift;
-	my $vars = shift;
+	my $self    = shift;
+	my $vars    = shift;
+    my $session = $self->session;
+
+    if ($self->get('state') =~ /^trash/) {
+        my $i18n = WebGUI::International->new($session, 'Asset_Template');
+        $session->errorHandler->warn('process called on template in trash: '.$self->getId
+            .'. The template was called through this url: '.$session->asset->get('url'));
+        return $session->var->isAdminOn ? $i18n->get('template in trash') : '';
+    }
+    elsif ($self->get('state') =~ /^clipboard/) {
+        my $i18n = WebGUI::International->new($session, 'Asset_Template');
+        $session->errorHandler->warn('process called on template in clipboard: '.$self->getId
+            .'. The template was called through this url: '.$session->asset->get('url'));
+        return $session->var->isAdminOn ? $i18n->get('template in clipboard') : '';
+    }
+
+    # Return a JSONinfied version of vars if JSON is the only requested content type.
+    if ( defined $session->request && $session->request->headers_in->{Accept} eq 'application/json' ) {
+       $session->http->setMimeType( 'application/json' );
+       return to_json( $vars );
+    }
+
+    my $stow = $session->stow;
+    my $show = $stow->get('showTemplateVars');
+    if ( $show && $show->{assetId} eq $self->getId && $self->canEdit ) {
+        # This will never be true again, cause we're getting rid of assetId
+        delete $show->{assetId};
+        $show->{vars} = $vars;
+        $stow->set( showTemplateVars => $show );
+    }
+
 	$self->prepare unless ($self->{_prepared});
-	return $self->getParser($self->session, $self->get("parser"))->process($self->get("template"), $vars);
+    my $parser      = $self->getParser($session, $self->get("parser"));
+    my $template    = $self->get('usePacked')
+                    ? $self->get('templatePacked')
+                    : $self->get('template')
+                    ;
+    my $output;
+    eval { $output = $parser->process($template, $vars); };
+    if (my $e = Exception::Class->caught) {
+        $session->log->error(sprintf "Error processing template: %s, %s, %s", $self->getUrl, $self->getId, $e->error);
+        my $i18n = WebGUI::International->new($session, 'Asset_Template');
+        $output = sprintf $i18n->get('template error').$e->error, $self->getUrl, $self->getId;
+    }
+	return $output;
 }
 
+#-------------------------------------------------------------------
+
+# Used for debugging and the template test renderer.
+
+# WARNING: Please do not rely on this behavior. It's a bit of a hack, and
+# should not be considered part of the core API. Eventually, we will have
+# introspectable template objects so that you can more easily (and
+# efficiently) get this kind of information.
+
+# If the first value for the 'X-Webgui-Template-Variables' header is our
+# assetId, then in addition to processing the template, append add a json
+# representation of our template variables to the response. The headers
+# "X-Webgui-Template-Variables-Start" and "X-Webgui-Template-Variables-End"
+# will contain the delimiters for the start and end of this content so that
+# the user agent (who had to have stuck the header in in the first place) can
+# parse it out.  The delimiters will make the whole thing look like an xml
+# comment (<!-- ... -->) just in case.
+
+# We would just send the vars in the header, but different webservers have
+# different limits on header field size and it's impossible to say whether our
+# data will fit inside them or not.
+
+# This is intended to be called earlier in the request cycle (in the Content
+# URL handler) so that the headers get sent before any chunked content starts
+# being set up.  We set the stow here and check it during process() to see
+# whether we need to include the delimited json. Later on, Content will call
+# call getVariableJson to get the results.
+
+{
+    my $head = 'X-Webgui-Template-Variables';
+    my @chr  = ('0'..'9', 'a'..'z', 'A'..'Z');
+
+    sub processVariableHeaders {
+        my ($class, $session) = @_;
+        my $r = $session->request;
+        if (my $id = $r->headers_in->{$head}) {
+            my $rnd = join('', map { $chr[int(rand($#chr))] } (1..32));
+            my $out = $r->headers_out;
+            my $st  = "<!-- $rnd ";
+            my $end = " $rnd -->";
+            $out->{"$head-Start"} = $st;
+            $out->{"$head-End"}   = $end;
+            $session->stow->set(
+                showTemplateVars => {
+                    assetId        => $id,
+                    startDelimiter => $st,
+                    endDelimiter   => $end,
+                }
+            );
+        }
+    }
+}
 
 #-------------------------------------------------------------------
 

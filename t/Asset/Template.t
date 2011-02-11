@@ -44,7 +44,52 @@ $var{variable} = "BBBBB";
 $output = $template->process(\%var);
 ok($output =~ m/\bBBBBB\b/, "process() - variables");
 ok($output =~ m/true/, "process() - conditionals");
-ok($output =~ m/\s(?:XY){5}\s/, "process() - loops");
+ok($output =~ m/\b(?:XY){5}\b/, "process() - loops");
+
+# See if template listens the Accept header
+my $request = $session->request;
+my $in      = $request->headers_in;
+my $out     = $request->headers_out;
+$in->{Accept} = 'application/json';
+
+my $json = $template->process(\%var);
+my $andNowItsAPerlHashRef = eval { from_json( $json ) };
+ok( !$@, 'Accept = json, JSON is returned' );
+cmp_deeply( \%var, $andNowItsAPerlHashRef, 'Accept = json, The correct JSON is returned' );
+
+# Done, so remove the json Accept header.
+delete $session->request->headers_in->{Accept};
+
+# Testing the stuff-your-variables-into-the-body-with-delimiters header
+my $oldUser = $session->user;
+
+# log in as admin so we pass canEdit
+$session->user({ userId => 3 });
+my $hname = 'X-Webgui-Template-Variables';
+$in->{$hname} = $template->getId;
+
+# processRaw sets some session variables (including username), so we need to
+# re-do it.
+WebGUI::Asset::Template->processRaw($session,$tmplText,\%var);
+
+# This has to get called to set up the stow good and proper
+WebGUI::Asset::Template->processVariableHeaders($session);
+
+$template->process(\%var);
+
+my $output = WebGUI::Asset::Template->getVariableJson($session);
+
+delete $in->{$hname};
+my $start = delete $out->{"$hname-Start"};
+my $end   = delete $out->{"$hname-End"};
+my ($json) = $output =~ /\Q$start\E(.*)\Q$end\E/;
+$andNowItsAPerlHashRef = eval { from_json( $json ) };
+cmp_deeply( $andNowItsAPerlHashRef, \%var, "$hname: json returned correctly" )
+    or diag "output: $output";
+
+$session->user({ user => $oldUser });
+
+# done testing the header stuff
 
 my $newList = WebGUI::Asset::Template->getList($session, 'WebGUI Test Template');
 ok(exists $newList->{$template->getId}, 'Uncommitted template exists returned from getList');
