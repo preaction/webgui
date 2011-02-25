@@ -58,6 +58,11 @@ use Exception::Class (
         isa             => 'WebGUI::Error',
         description     => "A template has errors that prevent it from being processed.",
         },
+    'WebGUI::Error::RevisionNotFound' => {
+        isa             => 'WebGUI::Error',
+        description     => 'The revision of the object you were trying to retrieve does not exist',
+        fields          => ["id", "revision"],
+    },
 );
 
 sub WebGUI::Error::full_message {

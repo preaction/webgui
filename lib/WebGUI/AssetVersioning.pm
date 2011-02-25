@@ -18,6 +18,8 @@ use strict;
 use WebGUI::Paginator;
 use WebGUI::VersionTag;
 use WebGUI::Search::Index;
+use WebGUI::Exception;
+use String::Diff qw( diff_merge );
 
 =head1 NAME
 
@@ -248,6 +250,60 @@ sub getCurrentRevisionDate  {
 		$session->stow->set("assetRevision",$assetRevision);
 	}
     return $revisionDate;
+}
+
+#----------------------------------------------------------------------------
+
+=head2 getRevisionChanges ( [ baseRevision ] )
+
+Get a hashref of changes between this revision and the given baseRevision. If not 
+specified, the baseRevision will default to the previous revision.
+
+=cut
+
+sub getRevisionChanges {
+    my ( $self, $baseRevision ) = @_;
+    my $baseAsset;
+    if ( !$baseRevision ) {
+        $baseAsset = $self->getPreviousRevision;
+    }
+    elsif ( !blessed $baseRevision ) {
+        $baseAsset = WebGUI::Asset->newByDynamicClass( $self->session, $self->getId, $baseRevision );
+    }
+    else {
+        $baseAsset = $baseRevision;
+    }
+
+    # Do we have a base revision?
+    if ( !$baseAsset ) {
+        WebGUI::Error::RevisionNotFound->throw(
+            id          => $self->getId,
+            revision    => $baseRevision || "prior to " . $self->get('revisionDate'),
+        );
+    }
+
+    # Build the changes
+    my %changes = ();
+    my %props = map { %{$_->{properties}} } @{ $self->definition( $self->session ) };
+    for my $propName ( keys %props ) {
+        my $prop = $props{ $propName };
+        my $fieldName = 'WebGUI::Form::' . ucfirst( $prop->{fieldType} ) || 'WebGUI::Form::Text';
+        my $newField = WebGUI::Pluggable::instanciate(
+            $fieldName, 'new', [ $self->session, { %{$prop}, value => $self->get( $propName ) } ]
+        );
+        my $oldField = WebGUI::Pluggable::instanciate(
+            $fieldName, 'new', [ $self->session, { %{$prop}, value => $baseAsset->get( $propName ) } ]
+        );
+
+        my $newValue = $newField->getValueAsHtml;
+        my $oldValue = $oldField->getValueAsHtml;
+
+        if ( $newValue ne $oldValue ) {
+            $changes{ $propName } = diff_merge( $newValue, $oldValue );
+        }
+    }
+
+    return \%changes;
 }
 
 #-------------------------------------------------------------------

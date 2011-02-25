@@ -15,7 +15,7 @@
 
 use FindBin;
 use strict;
-use lib "$FindBin::Bin/lib";
+use lib "$FindBin::Bin/../lib";
 use Test::More;
 use Test::Deep;
 use WebGUI::Test; # Must use this before any other WebGUI modules
@@ -63,6 +63,7 @@ my $expectedChanges = {
         mimeType    => "[text/plain]{text/html}",
         ownerUserId => "[Admin]{Visitor}", # getValueAsHtml here
         groupIdEdit => "[Admins]{Registered Users}", # getValueAsHtml here
+        assetSize => ignore(), # it will be changed, but no idea as to what
 };
 
 my $changes = $newRevision->getRevisionChanges( $oldRevision->get('revisionDate') );
@@ -71,7 +72,7 @@ cmp_deeply(
     $changes,
     $expectedChanges,
     "All changes are shown",
-);
+) or diag( explain $changes );
 
 my $changes = $newRevision->getRevisionChanges();
 is( ref $changes, 'HASH' );

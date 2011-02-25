@@ -105,6 +105,18 @@ sub getValue {
     return $self->WebGUI::Form::Control::getValue(@_);
 }
 
+=head2 getValueAsHtml( [ value ] )
+
+See WebGUI::Form::Control::getValueAsHtml()
+
+=cut
+
+# We want the actual value, not a joined list of options
+sub getValueAsHtml {
+    my $self = shift;
+    return $self->WebGUI::Form::Control::getValueAsHtml( @_ );
+}
+
 #-------------------------------------------------------------------
 
 =head2 getDefaultValue ( )
@@ -137,6 +149,7 @@ sub getOriginalValue {
 	if (ref $value eq 'ARRAY') {
 		$value = $value->[0];
 	}
+        $self->session->log->warn( "RETURNING ORIGINAL VALUE $value" );
 	return $value;
 }
 
